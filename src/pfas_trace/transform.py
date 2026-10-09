@@ -1,76 +1,132 @@
-import pandas as pd
-import numpy as np
+"""Implements the whole data transformation process."""
 
+import re
+
+import numpy as np
+import pandas as pd
 from sklearn.neighbors import BallTree
 
-from pfas_trace.config import DATASET_FILE
+
+EARTH_RADIUS_KM: float = 6371.0088
+BATCH_SIZE: int = 10_000
+COUNT_BANDS_KM: tuple[tuple[float, float], ...] = (
+    (0.0, 5.0),
+    (5.0, 25.0),
+    (25.0, 50.0),
+)
+
 
 def _clean_invalid_records(df: pd.DataFrame) -> pd.DataFrame:
-    """Centralizes and controls all cleanups discussed during data exploration.
-
-    Args:
-        df (pd.DataFrame): RAW input dataframe to clean.
-
-    Returns:
-        pd.DataFrame: cleaned dataframe, ready for feature extraction.
-    """
-    cleaned_df = df.dropna(subset=["lat", "lon", "date"]) # as stated in 01_DataExploration.ipynb
-    return cleaned_df
+    """Remove records without coordinates or measurement dates."""
+    return df.dropna(subset=["lat", "lon", "date"]).copy()
 
 
-def _extract_tier1_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Extracts TierA: PFAS-Source Category.
-    Answers: How close is a source in each category?
+def _normalize_feature_name(value: str) -> str:
+    """Convert a source-group name into a readable column-name prefix."""
+    normalized: str = value.lower()
+    normalized = re.sub(r"[^a-z0-9]+", "_", normalized)
+    return normalized.strip("_")
 
-    Features:
-    - producer_distance_min
-    - producer_count_5km
-    - user_distance_min
-    - user_count_5km
-    - presumptive_distance_min
-    - presumptive_count_5km
 
-    Args:
-        df (pd.DataFrame): RAW-Input Dataframe
+def _add_source_features(
+    feature_df: pd.DataFrame,
+    source_df: pd.DataFrame,
+    prefix: str,
+    valid_measurements: np.ndarray,
+    measurement_coords: np.ndarray,
+) -> None:
+    """Add nearest-source distance and counts in disjoint distance bands."""
 
-    Raises:
-        TypeError: _description_
+    distance_column: str = f"{prefix}_distance_min"
 
-    Returns:
-        pd.DataFrame: Extracted Tier1 features.
-    """
-    earth_radius_km: float = 6371.0088
-    batch_size: int = 10_000
-    count_bands_km: tuple[tuple[float, float], ...] = (
-        (0.0, 5.0),
-        (5.0, 25.0),
-        (25.0, 50.0),
+    feature_df[distance_column] = np.nan
+
+    for lower_km, upper_km in COUNT_BANDS_KM:
+        feature_name: str = (
+            f"{prefix}_count_{lower_km:g}_{upper_km:g}km"
+        )
+        feature_df[feature_name] = np.nan
+
+    source_coordinates: pd.DataFrame = source_df[
+        ["lat", "lon"]
+    ].apply(pd.to_numeric, errors="coerce")
+
+    valid_sources: pd.Series = (
+        source_coordinates.notna().all(axis=1)
+        & source_coordinates["lat"].between(-90, 90)
+        & source_coordinates["lon"].between(-180, 180)
     )
 
+    source_coords: np.ndarray = np.radians(
+        source_coordinates.loc[valid_sources].to_numpy(
+            dtype=np.float64
+        )
+    )
 
-    tier1_feature_df: pd.DataFrame = (
-        _clean_invalid_records(df)
-        .loc[
-            df["category"] == "Measurement",
-            ["date", "lat", "lon", "name", "city", "pfas_sum"],
+    valid_indices: np.ndarray = np.flatnonzero(valid_measurements)
+
+    if len(source_coords) == 0:
+        for lower_km, upper_km in COUNT_BANDS_KM:
+            feature_df.loc[
+                valid_indices,
+                f"{prefix}_count_{lower_km:g}_{upper_km:g}km",
+            ] = 0
+        return
+
+    tree: BallTree = BallTree(source_coords, metric="haversine")
+
+    for start in range(0, len(valid_indices), BATCH_SIZE):
+        indices: np.ndarray = valid_indices[
+            start : start + BATCH_SIZE
         ]
-        .copy()
-        .reset_index(drop=True)
-    )
+        batch_coords: np.ndarray = measurement_coords[indices]
 
-    producers_df: pd.DataFrame = df.loc[
-        df["category"] == "PFAS production facility"
-    ]
-    users_df: pd.DataFrame = df.loc[
-        df["category"] == "Known PFAS user"
-    ]
-    presumptives_df: pd.DataFrame = df.loc[
-        df["category"] == "Presumptive"
-    ]
+        distances_rad, _ = tree.query(batch_coords, k=1)
 
-    coordinates: pd.DataFrame = tier1_feature_df[["lat", "lon"]].apply(
-        pd.to_numeric, errors="coerce"
-    )
+        feature_df.loc[indices, distance_column] = (
+            distances_rad[:, 0] * EARTH_RADIUS_KM
+        )
+
+        # Count sources cumulatively within each upper boundary.
+        cumulative_counts: dict[float, np.ndarray] = {}
+
+        for _, upper_km in COUNT_BANDS_KM:
+            counts: np.ndarray = np.asarray(
+                tree.query_radius(
+                    batch_coords,
+                    r=upper_km / EARTH_RADIUS_KM,
+                    count_only=True,
+                ),
+                dtype=np.int64,
+            )
+            cumulative_counts[upper_km] = counts
+
+        # Convert cumulative counts into disjoint distance bands.
+        for band_index, (lower_km, upper_km) in enumerate(
+            COUNT_BANDS_KM
+        ):
+            upper_counts: np.ndarray = cumulative_counts[upper_km]
+
+            if band_index == 0:
+                band_counts: np.ndarray = upper_counts
+            else:
+                lower_counts: np.ndarray = cumulative_counts[lower_km]
+                band_counts = upper_counts - lower_counts
+
+            feature_df.loc[
+                indices,
+                f"{prefix}_count_{lower_km:g}_{upper_km:g}km",
+            ] = band_counts
+
+
+def _get_measurement_coordinates(
+    feature_df: pd.DataFrame,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return valid measurement indices and coordinates in radians."""
+
+    coordinates: pd.DataFrame = feature_df[
+        ["lat", "lon"]
+    ].apply(pd.to_numeric, errors="coerce")
 
     valid_measurements: np.ndarray = (
         coordinates.notna().all(axis=1)
@@ -82,133 +138,151 @@ def _extract_tier1_features(df: pd.DataFrame) -> pd.DataFrame:
         coordinates.to_numpy(dtype=np.float64)
     )
 
-    def add_source_features(
-        source_df: pd.DataFrame,
-        prefix: str,
-    ) -> None:
-        """Add nearest-source distance and counts in disjoint distance bands."""
+    return valid_measurements, measurement_coords
 
-        source_coordinates: pd.DataFrame = source_df[
-            ["lat", "lon"]
-        ].apply(pd.to_numeric, errors="coerce")
 
-        valid_sources: pd.Series = (
-            source_coordinates.notna().all(axis=1)
-            & source_coordinates["lat"].between(-90, 90)
-            & source_coordinates["lon"].between(-180, 180)
+def _extract_tier1_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract TierA: proximity to PFAS source categories."""
+
+    cleaned_df: pd.DataFrame = _clean_invalid_records(df)
+
+    tier1_feature_df: pd.DataFrame = (
+        cleaned_df.loc[
+            cleaned_df["category"] == "Measurement",
+            ["date", "lat", "lon", "name", "city", "pfas_sum"],
+        ]
+        .copy()
+        .reset_index(drop=True)
+    )
+
+    # Source records must not be filtered by measurement-date requirements.
+    producers_df: pd.DataFrame = df.loc[
+        df["category"] == "PFAS production facility"
+    ]
+
+    users_df: pd.DataFrame = df.loc[
+        df["category"] == "Known PFAS user"
+    ]
+
+    presumptives_df: pd.DataFrame = df.loc[
+        df["category"] == "Presumptive"
+    ]
+
+    valid_measurements, measurement_coords = (
+        _get_measurement_coordinates(tier1_feature_df)
+    )
+
+    source_categories: dict[str, pd.DataFrame] = {
+        "producer": producers_df,
+        "user": users_df,
+        "presumptive": presumptives_df,
+    }
+
+    for prefix, source_df in source_categories.items():
+        _add_source_features(
+            feature_df=tier1_feature_df,
+            source_df=source_df,
+            prefix=prefix,
+            valid_measurements=valid_measurements,
+            measurement_coords=measurement_coords,
         )
-
-        source_coords: np.ndarray = np.radians(
-            source_coordinates.loc[valid_sources].to_numpy(
-                dtype=np.float64
-            )
-        )
-
-        distance_column: str = f"{prefix}_distance_min"
-        tier1_feature_df[distance_column] = np.nan
-
-        for lower_km, upper_km in count_bands_km:
-            feature_name: str = (
-                f"{prefix}_count_{lower_km:g}_{upper_km:g}km"
-            )
-            tier1_feature_df[feature_name] = np.nan
-
-        valid_indices: np.ndarray = np.flatnonzero(
-            valid_measurements
-        )
-
-        if len(source_coords) == 0:
-            for lower_km, upper_km in count_bands_km:
-                tier1_feature_df.loc[
-                    valid_indices,
-                    f"{prefix}_count_{lower_km:g}_{upper_km:g}km",
-                ] = 0
-            return
-
-        tree: BallTree = BallTree(
-            source_coords,
-            metric="haversine",
-        )
-
-        for start in range(0, len(valid_indices), batch_size):
-            indices: np.ndarray = valid_indices[
-                start : start + batch_size
-            ]
-            batch_coords: np.ndarray = measurement_coords[indices]
-
-            distances_rad, _ = tree.query(batch_coords, k=1)
-
-            distances_km: np.ndarray = (
-                distances_rad[:, 0] * earth_radius_km
-            )
-
-            tier1_feature_df.loc[indices, distance_column] = distances_km
-
-            # Count sources cumulatively within each upper boundary.
-            cumulative_counts: dict[float, np.ndarray] = {}
-
-            for _, upper_km in count_bands_km:
-                counts_result = tree.query_radius(
-                    batch_coords,
-                    r=upper_km / earth_radius_km,
-                    count_only=True,
-                )
-
-                if isinstance(counts_result, tuple):
-                    raise TypeError(
-                        "Expected an array from query_radius "
-                        "with count_only=True."
-                    )
-
-                cumulative_counts[upper_km] = np.asarray(
-                    counts_result,
-                    dtype=np.int64,
-                )
-
-            # Convert cumulative counts into disjoint bands.
-            for band_index, (lower_km, upper_km) in enumerate(
-                count_bands_km
-            ):
-                upper_counts: np.ndarray = cumulative_counts[upper_km]
-
-                if band_index == 0:
-                    band_counts: np.ndarray = upper_counts
-                else:
-                    lower_counts: np.ndarray = cumulative_counts[lower_km]
-                    band_counts = upper_counts - lower_counts
-
-                tier1_feature_df.loc[
-                    indices,
-                    f"{prefix}_count_{lower_km:g}_{upper_km:g}km",
-                ] = band_counts
-
-    add_source_features(producers_df, "producer")
-    add_source_features(users_df, "user")
-    add_source_features(presumptives_df, "presumptive")
 
     return tier1_feature_df
 
-def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
-    feature_df = _extract_tier1_features(df)
+
+def _extract_tier2_features(
+    df: pd.DataFrame,
+    feature_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Extract TierB: proximity to dynamic presumptive source groups."""
+
+    presumptive_df: pd.DataFrame = df.loc[
+        df["category"] == "Presumptive"
+    ].copy()
+
+    # Use sector when available; otherwise fall back to type.
+    sectors: pd.Series = (
+        presumptive_df["sector"]
+        .astype("string")
+        .str.strip()
+        .replace("", pd.NA)
+    )
+
+    source_types: pd.Series = (
+        presumptive_df["type"]
+        .astype("string")
+        .str.strip()
+        .replace("", pd.NA)
+    )
+
+    presumptive_df["_source_group"] = sectors.fillna(source_types)
+
+    presumptive_df = presumptive_df.loc[
+        presumptive_df["_source_group"].notna()
+    ]
+
+    valid_measurements, measurement_coords = (
+        _get_measurement_coordinates(feature_df)
+    )
+
+    # Normalize all source-group names and detect naming collisions.
+    group_names: dict[str, str] = {}
+
+    for source_group in sorted(
+        presumptive_df["_source_group"].unique().tolist()
+    ):
+        prefix: str = _normalize_feature_name(str(source_group))
+
+        if not prefix:
+            raise ValueError(
+                f"Source group {source_group!r} produces an empty prefix."
+            )
+
+        if prefix in group_names and group_names[prefix] != source_group:
+            raise ValueError(
+                "Source-group naming collision: "
+                f"{group_names[prefix]!r} and {source_group!r} "
+                f"both normalize to {prefix!r}."
+            )
+
+        group_names[prefix] = str(source_group)
+
+    for prefix, source_group in group_names.items():
+        source_df: pd.DataFrame = presumptive_df.loc[
+            presumptive_df["_source_group"] == source_group
+        ]
+
+        _add_source_features(
+            feature_df=feature_df,
+            source_df=source_df,
+            prefix=prefix,
+            valid_measurements=valid_measurements,
+            measurement_coords=measurement_coords,
+        )
 
     return feature_df
+
+
+def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract TierA and TierB features from the raw dataset."""
+
+    feature_df: pd.DataFrame = _extract_tier1_features(df)
+    feature_df = _extract_tier2_features(df, feature_df)
+
+    feature_df['date'] = pd.to_datetime(feature_df["date"])
+
+    return feature_df
+
     # CemA, ChemB, PFAS_sum (Label),
 
 
-    feature_df = df.query('category == "Measurement"')[
-        ['year','lat','lon','name','city', 'pfas_sum']
-    ]
-
-    producers_df = df.query('category == "PFAS production facility"')
-    users_df = df.query('category =="Known PFAS user"')
-    presumptives_df = df.query('category == "Presumptive"')
 
 
 
 
 
 
-    # TierB: Industrial Sector (How close is a particular type of industry?)
+    # TierB:
     # metal_coating_distance_min
     # metal_coating_count_5km
     # sewerage_distance_min
@@ -220,5 +294,3 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
     # TierC: Sourcecategory X Sector
 
     # Set correct datatypes
-
-    return feature_df

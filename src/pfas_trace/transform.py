@@ -1,11 +1,14 @@
 """Implements the whole data transformation process."""
-
+import logging
 import re
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import BallTree
 
+
+logger = logging.getLogger(__name__)
 
 EARTH_RADIUS_KM: float = 6371.0088
 BATCH_SIZE: int = 10_000
@@ -205,15 +208,15 @@ def _extract_tier2_features(
         presumptive_df["sector"]
         .astype("string")
         .str.strip()
-        .replace("", pd.NA)
     )
+    sectors = sectors.mask(sectors == "", pd.NA)
 
     source_types: pd.Series = (
         presumptive_df["type"]
         .astype("string")
         .str.strip()
-        .replace("", pd.NA)
     )
+    source_types = source_types.mask(source_types == "", pd.NA)
 
     presumptive_df["_source_group"] = sectors.fillna(source_types)
 
@@ -262,6 +265,43 @@ def _extract_tier2_features(
 
     return feature_df
 
+def _compress_dataframe(df : pd.DataFrame) -> pd.DataFrame:
+    """Reduces size of dataframe by downcasting numerical columns.
+
+    Args:
+        df (pd.DataFrame): DataFrame to compress.
+
+    Returns:
+        pd.DataFrame: Compressed DataFrame.
+    """
+    def _human_readable_size(num_bytes: int) -> str:
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if num_bytes < 1024:
+                return f"{num_bytes:.2f} {unit}"
+            num_bytes //= 1024
+        return f"{num_bytes:.2f} TB"
+
+    in_bytes = df.memory_usage(index=True, deep=True).sum()
+    logger.info("unoptimized dataframe size: %s",_human_readable_size(int(in_bytes)))
+
+    downcast_types: list[Literal["float", "integer"]] = ["float", "integer"]
+
+    for downcast_type in downcast_types:
+        cols: list[str] = list(df.select_dtypes(include=downcast_type).columns)
+
+        for col in cols:
+            df[col] = pd.to_numeric(df[col], downcast=downcast_type)
+
+    out_bytes = df.memory_usage(index=True, deep=True).sum()
+    reduction_pct = 0.0
+    if in_bytes:
+        reduction_pct = (1 - (out_bytes / in_bytes)) * 100
+
+    logger.info("optimized dataframe size: %s (-%.2f%%)",
+                _human_readable_size(int(out_bytes)),reduction_pct)
+
+    return df
+
 
 def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
     """Extract TierA and TierB features from the raw dataset."""
@@ -270,6 +310,8 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
     feature_df = _extract_tier2_features(df, feature_df)
 
     feature_df['date'] = pd.to_datetime(feature_df["date"])
+
+    feature_df = _compress_dataframe(feature_df)
 
     return feature_df
 

@@ -314,25 +314,3 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
     feature_df = _compress_dataframe(feature_df)
 
     return feature_df
-
-    # CemA, ChemB, PFAS_sum (Label),
-
-
-
-
-
-
-
-
-    # TierB:
-    # metal_coating_distance_min
-    # metal_coating_count_5km
-    # sewerage_distance_min
-    # sewerage_count_5km
-    # plastic_manufacturing_distance_min
-    # plastic_manufacturing_count_5km
-
-
-    # TierC: Sourcecategory X Sector
-
-    # Set correct datatypes

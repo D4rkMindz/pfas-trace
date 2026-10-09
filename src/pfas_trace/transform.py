@@ -14,10 +14,31 @@ def _clean_invalid_records(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: cleaned dataframe, ready for feature extraction.
     """
-    cleaned_df = df.dropna(subset=["lat", "lon"]) # as stated in 01_DataExploration.ipynb
+    cleaned_df = df.dropna(subset=["lat", "lon", "date"]) # as stated in 01_DataExploration.ipynb
     return cleaned_df
 
-def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
+
+def _extract_tier1_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Extracts TierA: PFAS-Source Category.
+    Answers: How close is a source in each category?
+
+    Features:
+    - producer_distance_min
+    - producer_count_5km
+    - user_distance_min
+    - user_count_5km
+    - presumptive_distance_min
+    - presumptive_count_5km
+
+    Args:
+        df (pd.DataFrame): RAW-Input Dataframe
+
+    Raises:
+        TypeError: _description_
+
+    Returns:
+        pd.DataFrame: Extracted Tier1 features.
+    """
     earth_radius_km: float = 6371.0088
     batch_size: int = 10_000
     count_bands_km: tuple[tuple[float, float], ...] = (
@@ -27,7 +48,7 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-    feature_df: pd.DataFrame = (
+    tier1_feature_df: pd.DataFrame = (
         _clean_invalid_records(df)
         .loc[
             df["category"] == "Measurement",
@@ -47,7 +68,7 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
         df["category"] == "Presumptive"
     ]
 
-    coordinates: pd.DataFrame = feature_df[["lat", "lon"]].apply(
+    coordinates: pd.DataFrame = tier1_feature_df[["lat", "lon"]].apply(
         pd.to_numeric, errors="coerce"
     )
 
@@ -84,13 +105,13 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
         )
 
         distance_column: str = f"{prefix}_distance_min"
-        feature_df[distance_column] = np.nan
+        tier1_feature_df[distance_column] = np.nan
 
         for lower_km, upper_km in count_bands_km:
             feature_name: str = (
                 f"{prefix}_count_{lower_km:g}_{upper_km:g}km"
             )
-            feature_df[feature_name] = np.nan
+            tier1_feature_df[feature_name] = np.nan
 
         valid_indices: np.ndarray = np.flatnonzero(
             valid_measurements
@@ -98,7 +119,7 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
 
         if len(source_coords) == 0:
             for lower_km, upper_km in count_bands_km:
-                feature_df.loc[
+                tier1_feature_df.loc[
                     valid_indices,
                     f"{prefix}_count_{lower_km:g}_{upper_km:g}km",
                 ] = 0
@@ -121,7 +142,7 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
                 distances_rad[:, 0] * earth_radius_km
             )
 
-            feature_df.loc[indices, distance_column] = distances_km
+            tier1_feature_df.loc[indices, distance_column] = distances_km
 
             # Count sources cumulatively within each upper boundary.
             cumulative_counts: dict[float, np.ndarray] = {}
@@ -156,7 +177,7 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
                     lower_counts: np.ndarray = cumulative_counts[lower_km]
                     band_counts = upper_counts - lower_counts
 
-                feature_df.loc[
+                tier1_feature_df.loc[
                     indices,
                     f"{prefix}_count_{lower_km:g}_{upper_km:g}km",
                 ] = band_counts
@@ -165,14 +186,13 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
     add_source_features(users_df, "user")
     add_source_features(presumptives_df, "presumptive")
 
+    return tier1_feature_df
+
+def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
+    feature_df = _extract_tier1_features(df)
+
     return feature_df
-    # Year,
-    # lat, long
-    # name, city (debug)
     # CemA, ChemB, PFAS_sum (Label),
-    # producer_distance_min, producer_count_5km,
-    # Pro Sektor: user_distance_min, user_count_1km,
-    # Pro Sektor: presumtive_distance_min, presumtive_count_5km
 
 
     feature_df = df.query('category == "Measurement"')[
@@ -184,13 +204,7 @@ def load_and_transform(df: pd.DataFrame) -> pd.DataFrame:
     presumptives_df = df.query('category == "Presumptive"')
 
 
-    # TierA: PFAS-Source Category (How close is a source in each category?)
-    # producer_distance_min
-    # producer_count_5km
-    # user_distance_min
-    # user_count_5km
-    # presumptive_distance_min
-    # presumptive_count_5km
+
 
 
 

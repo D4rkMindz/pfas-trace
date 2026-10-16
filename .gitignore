@@ -2,4 +2,6 @@
 !/data/.gitkeep
 __pycache__
 
+.env
+
 .ipynb_checkpoints

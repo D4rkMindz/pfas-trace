@@ -2,3 +2,7 @@
 !/data/.gitkeep
 __pycache__
 .env
+
+.claude
+
+.venv/

@@ -56,5 +56,7 @@ to track the results and progress of different models.
 To persist experiments, the data is stored in a [PostgreSQL](https://www.postgresql.org/) database locally in a docker 
 container.
 
+The MLflow UI is available on [localhost:5050](http://localhost:5050).
+
 # License
 proprietary (for now)

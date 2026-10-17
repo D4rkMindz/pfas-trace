@@ -1,8 +1,12 @@
 /data/*
 !/data/.gitkeep
 __pycache__
-.env
 
-.claude
+*.env
+!.env.template
+
+.ipynb_checkpoints
+
+.claude/
 
 .venv/

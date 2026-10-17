@@ -2,6 +2,8 @@
 !/data/.gitkeep
 __pycache__
 
+*-pycharm-support-libs/
+
 *.env
 !.env.template
 

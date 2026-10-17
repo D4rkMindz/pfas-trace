@@ -58,5 +58,18 @@ container.
 
 The MLflow UI is available on [localhost:5050](http://localhost:5050).
 
+## Jupyter Lab
+[jupyter](https://jupyter.org/) notebooks allow to run code in cells. Those notebooks can be found in `notebooks/`. 
+Some notebooks require the project dependencies, therefore you can run the jupyter lab server with the project virtual
+enviornment by using
+
+```bash
+make lab
+```
+
+_This command starts a jupyter lab server on port_ `8989` _with a password to allow connecting IDEs like pycharm to it.
+The password is only used in dev and must be hardcoded into the makefile, therefore it is documented there. You can 
+always generate a new password by following the instructions there._
+
 # License
 proprietary (for now)

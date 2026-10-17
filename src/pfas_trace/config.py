@@ -10,10 +10,10 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / 'data'
-DATASET_FILE = DATA_DIR / "export.parquet"
+DATA_DIR = PROJECT_ROOT / "data"
+DATASET_IMPORT = DATA_DIR / "export.parquet"
 
-DATASET_FILE = DATA_DIR / "export.parquet"
+DATASET_FEATURES = DATA_DIR / "features.parquet"
 
 DATASET_PRESUMPTIVE_USERS = DATA_DIR / "extract.presumptive-users.parquet"
 DATASET_USERS = DATA_DIR / "extract.users.parquet"

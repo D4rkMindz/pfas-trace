@@ -6,6 +6,7 @@ import logging
 from typing import Literal
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,13 @@ class Settings(BaseSettings):
 
     # PFAS hub
     DATASET_URL: str = "https://pdh.cnrs.fr/download/full.parquet"
+
+    # MLflow (server from docker-compose.yml)
+    MLFLOW_TRACKING_URI: str = "http://localhost:5050"
+    # only used by docker-compose.yml, declared here because .env is shared
+    POSTGRES_MLFLOW_USER: str = Field(alias="POSTGRES_MLFLOW_USER")
+    POSTGRES_MLFLOW_PASSWORD: str = Field(alias="POSTGRES_MLFLOW_PASSWORD")
+    POSTGRES_MLFLOW_DB: str = Field(alias="POSTGRES_MLFLOW_DB")
 
     # Google Cloud Platform
 

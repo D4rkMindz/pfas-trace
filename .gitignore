@@ -2,6 +2,13 @@
 !/data/.gitkeep
 __pycache__
 
-.env
+*-pycharm-support-libs/
+
+*.env
+!.env.template
 
 .ipynb_checkpoints
+
+.claude/
+
+.venv/

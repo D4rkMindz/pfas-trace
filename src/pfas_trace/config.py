@@ -6,13 +6,14 @@ import logging
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = PROJECT_ROOT / 'data'
-DATASET_FILE = DATA_DIR / "export.parquet"
+DATA_DIR = PROJECT_ROOT / "data"
+DATASET_IMPORT = DATA_DIR / "export.parquet"
 
-DATASET_FILE = DATA_DIR / "export.parquet"
+DATASET_FEATURES = DATA_DIR / "features.parquet"
 
 DATASET_PRESUMPTIVE_USERS = DATA_DIR / "extract.presumptive-users.parquet"
 DATASET_USERS = DATA_DIR / "extract.users.parquet"
@@ -35,6 +36,13 @@ class Settings(BaseSettings):
 
     # PFAS hub
     DATASET_URL: str = "https://pdh.cnrs.fr/download/full.parquet"
+
+    # MLflow (server from docker-compose.yml)
+    MLFLOW_TRACKING_URI: str = "http://localhost:5050"
+    # only used by docker-compose.yml, declared here because .env is shared
+    POSTGRES_MLFLOW_USER: str = Field(alias="POSTGRES_MLFLOW_USER")
+    POSTGRES_MLFLOW_PASSWORD: str = Field(alias="POSTGRES_MLFLOW_PASSWORD")
+    POSTGRES_MLFLOW_DB: str = Field(alias="POSTGRES_MLFLOW_DB")
 
     # Google Cloud Platform
 

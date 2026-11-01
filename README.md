@@ -71,5 +71,10 @@ _This command starts a jupyter lab server on port_ `8989` _with a password to al
 The password is only used in dev and must be hardcoded into the makefile, therefore it is documented there. You can 
 always generate a new password by following the instructions there._
 
+### Running the pipeline
+
+The setup of the jupyter lab will also open the lab instance in your browser. To run the preprocessing pipeline, please run
+the notebooks in `notebooks/preprocessing/` in order of their prefix.
+
 # License
 proprietary (for now)

@@ -1,0 +1,284 @@
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=0.85in}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{microtype}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[most]{tcolorbox}
+\usepackage[hidelinks]{hyperref}
+
+% --- Custom Colors ---
+\definecolor{primaryBlue}{RGB}{10, 80, 160}
+\definecolor{lightGray}{RGB}{245, 245, 245}
+
+% --- Section Styling ---
+\titleformat{\section}{\large\bfseries\color{primaryBlue}}{}{0em}{}[\titlerule]
+\setlist[itemize]{leftmargin=*, noitemsep, topsep=2pt}
+\setlist[enumerate]{noitemsep, topsep=2pt}
+
+% --- Inline code ---
+\newcommand{\code}[1]{\texttt{#1}}
+
+% --- Custom Box for Student Info ---
+\newtcolorbox{studentbox}{
+    colback=lightGray,
+    colframe=primaryBlue,
+    boxrule=0.5pt,
+    arc=4pt,
+    left=15pt,
+    right=15pt,
+    top=10pt,
+    bottom=10pt
+}
+
+\begin{document}
+
+% --- Header Section ---
+\begin{center}
+    {\huge \bfseries \color{primaryBlue} Dataset Datasheet} \\[0.2cm]
+    {\large \textbf{Course:} DSPRO2 HS26} \\[0.1cm]
+\end{center}
+
+\vspace{0.4cm}
+
+% --- Student & Project Information ---
+\begin{studentbox}
+    \begin{tabularx}{\textwidth}{l X}
+        \textbf{Project Name:} & PFAS trace \\
+        \textbf{Student Names:} & Björn Pfoster \\
+        \textbf{Date:} & \today \\
+        \textbf{GitHub Repository:} & \url{https://github.com/D4rkMindz/pfas-trace} \\
+    \end{tabularx}
+\end{studentbox}
+
+\vspace{0.5cm}
+
+% --- Section 1: Overview ---
+\section{Dataset Overview}
+\begin{itemize}
+    \item \textbf{Official Name:} PFAS Data Hub (PDH), full export \code{full.parquet}. We use the French subset.
+    \item \textbf{Owner / Contact:} CNRS Humanities \& Social Sciences, PFAS Data Hub (PDH) / \code{pdh.cnrs@proton.me}
+    \item \textbf{Short Description:} PDH merges European PFAS measurements with the locations of potential PFAS sources. Our French subset holds concentrations from environmental samples plus the locations of PFAS producers, known PFAS users and presumptive sites such as airports or waste sites.
+    \item \textbf{Version \& Date:} PDH publishes no version numbers, so we pin the version by it's latest sample.
+    \begin{itemize}
+        \item Raw: downloaded 1 November 2026, latest sample 31 August 2026
+        \item Features: built 16 October 2026
+    \end{itemize}
+    \item \textbf{Reference:} \url{https://pdh.cnrs.fr}. Processing: \url{https://pdh.cnrs.fr/en/data_doc/}. Original Forever Pollution Project method: Cordner et al. (2024), \textit{Environmental Science \& Technology}, DOI \href{https://doi.org/10.1021/acs.est.3c09746}{10.1021/acs.est.3c09746}.
+\end{itemize}
+
+% --- Section 2: Motivation ---
+\section{Motivation and Intended Use}
+\begin{itemize}
+    \item \textbf{Primary Purpose:} The CNRS started PDH in January 2024. It builds on the Forever Pollution Project, an investigation by 16 European newsrooms, and maps PFAS contamination with published raw data and processing code. PDH did not build the dataset for machine learning.
+    \item \textbf{Intended Use:} The pfas-trace project aims to train a supervised regression that predicts \code{log1p(pfas\_sum)} per measurement from the distance to, and the number of, surrounding PFAS source groups. This serves the projects research question: can proximity to industrial sectors explain spatial variation in PFAS concentrations and composition in France? The column \code{pfas\_values} also supports per-substance targets for the composition part.
+    \item \textbf{Out-of-Scope Use:} Not suitable for
+    \begin{enumerate}
+        \item naming or ranking companies as polluters. PDH defines presumptive sites as sites where testing has not confirmed PFAS.
+        \item causal claims. Proximity captures association and ignores hydrology and emission pathways.
+        \item health or safety decisions about a specific water supply, household or person.
+        \item regulatory checks or transfer to other countries. The target mixes matrices and the training data covers France.
+    \end{enumerate}
+\end{itemize}
+
+% --- Section 3: Composition ---
+\section{Composition and Coverage}
+\begin{itemize}
+    \item \textbf{Data Types:} Structured (tabular), with semi-structured JSON in \code{pfas\_values} and \code{details}.
+    \item \textbf{Population:} Environmental samples taken in France, including overseas territories, and potential source sites. The French subset holds 5 production sites of 4 operators, 27 known user records and 1'506 presumptive sites. The data describes places, and people are not a target of it.
+    \item \textbf{Dataset Size:}
+    \begin{itemize}
+        \item Raw export: 1'322'273 records, 21 columns
+        \item France: 1'094'220 records, of which 1'092'682 measurements and 1'538 source records
+        \item Substance results: 25'712'660 across 180 substances, 28.9 per measurement on average
+        \item Feature set: 734'236 measurements, 87 columns (80 features, 1 target, 6 identifiers)
+        \item Time span of the feature set: 4 January 2010 to 31 August 2026
+    \end{itemize}
+    Table~\ref{tab:matrix} shows the feature set per sample matrix. Groundwater reports 91.2\% zeros, wastewater 33.6\%.
+
+    \begin{table}[h]
+        \centering
+        \small
+        \begin{tabular}{l r r r r r}
+            \toprule
+            \textbf{Matrix} & \textbf{Rows} & \textbf{Zeros} & \textbf{Median} & \textbf{P99} & \textbf{Unit} \\
+            \midrule
+            Surface water & 339'545 & 53.5\% & 0 & 690 & ng/l \\
+            Groundwater & 318'041 & 91.2\% & 0 & 148 & ng/l \\
+            Drinking water & 46'792 & 87.9\% & 0 & 139 & ng/l \\
+            Sediment & 13'602 & 80.3\% & 0 & 55'989 & ng/kg dw (98\%) \\
+            Wastewater & 12'017 & 33.6\% & 82 & 48'840 & ng/l \\
+            Biota & 3'184 & 30.4\% & 960 & 42'317 & ng/kg fw \\
+            Other (4 matrices) & 1'055 & & & & mixed \\
+            \bottomrule
+        \end{tabular}
+        \caption{Feature set per matrix, statistics of \code{pfas\_sum}}
+        \label{tab:matrix}
+    \end{table}
+
+    \item \textbf{Known Gaps / Imbalances:}
+    \begin{enumerate}
+        \item \textbf{Missing coordinates:} 358'304 French measurements (32.7\%) have no coordinates, and 355'985 of them come from the tap water dataset \code{france\_eaurob}. Dropping them cuts groundwater by 221'009, drinking water by 69'006, surface water by 59'533 and all other matrices by 8'756 measurements.
+        \item \textbf{Temporal:} Rows per year grow from 15'229 (2010) to 114'495 (2024), and 2026 ends in August. Source sites carry no dates, so the features cannot reflect when a site opened or closed.
+        \item \textbf{Source imbalance:} 5 production sites stand against 1'506 presumptive sites. The median measurement lies 160 km from a producer, so most producer counts equal 0. The smallest presumptive group has 5 firefighting sites.
+        \item \textbf{Sampling bias:} Authorities and operators choose where to sample. The 32'404 rows of \code{France - ICPE} come from industrial self-evaluations and sit next to a source. A location without samples tells you nothing about its contamination.
+        \item \textbf{Geographic:} 12'387 rows (1.7\%) lie outside metropolitan France.
+        \item \textbf{Substances:} Panels range from 1 to 104 substances per record. Fluorinated pesticides such as Diflufenican and Norflurazon lead the result counts, while agriculture has no source group.
+    \end{enumerate}
+\end{itemize}
+
+% --- Section 4: Collection ---
+\section{Sources and Collection}
+\begin{itemize}
+    \item \textbf{Provenance:} Third-party public data, compiled by PDH from authorities, NGOs, journalists and scientific papers. The feature set draws on six measurement datasets:
+    \begin{itemize}
+        \item \code{france\_eaurob}: 404'677 rows, Ministry of Health tap water monitoring
+        \item \code{france\_naiades}: 337'371 rows, national surface water portal
+        \item \code{france\_ades}: 316'245 rows, national groundwater portal
+        \item \code{France - ICPE}: 32'404 rows, regional authorities, industrial self-evaluations
+        \item \code{Rhine Aquifer}: 1'012 rows, Aprona
+        \item \code{Others}: 2'431 rows
+    \end{itemize}
+    Source sites come from E-PRTR and EEA wastewater registers, OurAirports and manual open-source compilations of the Forever Pollution Project.
+    \item \textbf{Collection Method:} Two stages.
+    \begin{enumerate}
+        \item \textbf{PDH:} extracts each source (API, download, freedom-of-information requests, OSINT), normalises it and merges everything into \code{full.parquet}. PDH refreshes dynamic datasets every 30 days.
+        \item \textbf{We:} download \url{https://pdh.cnrs.fr/download/full.parquet} into \code{data/export.parquet} with the notebook \code{00\_Download.ipynb}.
+    \end{enumerate}
+    \item \textbf{Jurisdictions:} French authorities and organisations collected the samples in France and its overseas territories. We process the snapshot on local machines in Switzerland.
+\end{itemize}
+
+% --- Section 5: Labels ---
+\section{Labels and Targets}
+\begin{itemize}
+    \item \textbf{Target Definition:} Continuous regression target \code{pfas\_sum}, the sum of all substance concentrations above the detection or quantification limit of a sample. We train on \code{log1p(pfas\_sum)} because of the skew.
+    \item \textbf{Labeling Process:} Labels are laboratory measurements and no human annotation is involved. PDH converts values to parts per billion and stores results below a limit in \code{less\_than}, so they do not add to the sum. PDH discards results flagged below a limit without a number. A value of 0 therefore means that no substance of that panel exceeded its limit, so the sample can still contain PFAS.
+    \item \textbf{Quality Control:}
+    \begin{itemize}
+        \item \textbf{PDH:} publishes raw data and code and accepts error reports, but describes no formal validation. For \code{France - ICPE} it warns: ``there are data problems''.
+        \item \textbf{Recalculation:} We recomputed \code{pfas\_sum} from \code{pfas\_values} on a random sample of 50'000 records and matched 100\%.
+        \item \textbf{Range checks:} We found 0 negative values and 0 unparseable dates. All 1'538 source sites have coordinates.
+        \item \textbf{Spot check:} The 10 largest values all come from \code{France - ICPE} industrial discharge points. We treat them as real signal and keep them.
+    \end{itemize}
+\end{itemize}
+
+% --- Section 6: Data Quality Audit ---
+\section{Quality Assessment (Data Audit)}
+\begin{itemize}
+    \item \textbf{Preprocessing Steps:} Figure~\ref{fig:pipeline} shows the pipeline.
+    \begin{enumerate}
+        \item Filter to \code{country == "France"}.
+        \item Drop measurements without coordinates (358'304) or date (1680). This keeps 67.3\% of them.
+        \item Compute 4 features per source group with a haversine \code{BallTree}: distance to the nearest site and site counts within 0--5, 5--25 and 25--50 km. Tier 1 covers producers, known users and all presumptive sites. Tier 2 splits presumptive sites into 17 groups by \code{sector}, with \code{type} as fallback.
+        \item Downcast numeric columns (499 MB to 270 MB in memory) and write \code{features.parquet}.
+    \end{enumerate}
+
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=\linewidth]{images/Pipeline.png}
+        \caption{Pipeline from export to training. Tier 2 shows 10 of the 17 groups. The 0.15\% refers to all 1'680 undated French records, of which 1'538 are source sites without dates by definition.}
+        \label{fig:pipeline}
+    \end{figure}
+
+    \item \textbf{Initial Audit Findings:}
+    \begin{itemize}
+        \item \textbf{Outliers:} 72.1\% of targets equal 0, the 99th percentile is 1'640 and the maximum is 509'000'000 ng/l at an industrial discharge. We keep these values and compress them with \code{log1p}.
+        \item \textbf{Mixed units:} 17'531 rows (2.4\%) report ng/kg and share a target with ng/l. \code{features.parquet} carries neither \code{matrix} nor \code{unit}, so the model cannot separate them. Next step: add both columns or filter to water.
+        \item \textbf{Duplicates:} The raw file has 0 exact duplicates. The feature set has 8'690 exact copies and 33'438 repeated station-date pairs, since it drops \code{matrix} and \code{pfas\_values}. The pipeline keeps them for now.
+        \item \textbf{Station identity:} 6'952 coordinates carry more than one station name, 252 names map to several coordinates and 1'012 rows share the name ``Sampling location''. We split by name, so 25.5\% of test rows share coordinates with a training row and therefore have identical features. The baseline result (RMSE 1.618 against 1.749 for the mean, $R^2$ 0.145, log scale) may overestimate performance. Next step: group the split by coordinates.
+        \item \textbf{Data drift:} The share of zeros falls from 99\% (2010) to 58\% (2026) while the mean panel grows from 12.8 to 36.6 substances. Testing more substances can explain part of this shift, and the model sees neither date nor panel size.
+        \item \textbf{Distances:} Overseas rows reach 8'977 km to the nearest producer, against 564 km in metropolitan France.
+    \end{itemize}
+    \item \textbf{Quality Dimensions:}
+    \begin{itemize}
+        \item \textbf{Completeness:} 67.1\% of French measurements survive cleaning. Feature columns hold no missing values. \code{city} is empty on 46.2\% of feature rows, and the model does not use it.
+        \item \textbf{Accuracy:} We trust values as reported and have no external ground truth. PDH places tap water samples at the centroid of their distribution zone, so these coordinates are approximate.
+        \item \textbf{Consistency:} PDH enforces one schema and converts to parts per billion. Matrices, units, panels and station names still differ between datasets.
+        \item \textbf{Timeliness:} Measurements run until August 2026. The snapshot stays frozen at 1 November 2026, while upstream keeps changing. Source sites have no timestamps.
+    \end{itemize}
+\end{itemize}
+
+% --- Section 7: Ethics & Governance ---
+\section{Legal, Ethical, and Governance}
+\begin{itemize}
+    \item \textbf{Sensitive Data:} The dataset holds no special-category data and no health records. Location data describes sampling points and sites, and \code{name} holds station, company and site names. A company name next to the label ``Presumptive'' carries a reputational risk, since testing has not confirmed PFAS at these sites.\\
+    \textbf{Mitigations}:
+    \begin{itemize}
+        \item the model excludes identifiers, and we use \code{name} for splitting only
+        \item we report results per source group and do not rank companies
+        \item \code{data/} is git-ignored, so the repository publishes neither raw data nor features
+    \end{itemize}
+    \item \textbf{Compliance:} \textbf{nFADP and GDPR:} both protect natural persons and not companies, so they apply only where a name identifies a person, for example a sole proprietor. We treat such rows as personal data and do not publish them.\\
+    \textbf{EU AI Act:} We assess the project as a minimal-risk research prototype that makes no decisions about people. Article 2(6) excludes systems built for the sole purpose of scientific research. Use as a safety component in water supply management would fall under Annex III (high risk) and needs a new assessment. We made this assessment ourselves, without legal review.
+    \item \textbf{Consent \& Licensing:} The data involves no human subjects, so consent does not apply. PDH states no licence on its pages (checked 1 November 2026). \code{france\_eaurob} uses Licence Ouverte 2.0 and the Naiades portal uses etalab-2.0, which together cover 52\% of the feature rows and require attribution. We could not confirm a licence for ADES, ICPE and the remaining sources. We therefore use the data for \textbf{academic purposes only} (HSLU DSPRO2), cite PDH and its sources and do \textbf{not} redistribute the data. Any release of derived data needs written confirmation from PDH first. The code is proprietary for now.
+\end{itemize}
+
+% --- Section: Structure & Schema ---
+\section{Dataset Structure and Schema}
+\begin{itemize}
+    \item \textbf{File Formats:} Apache Parquet, with JSON strings in \code{pfas\_values} and \code{details}.
+    \item \textbf{Directory Layout:} The folder \code{data/} is flat and git-ignored.
+    \begin{itemize}
+        \item \code{export.parquet}: raw PDH snapshot
+        \item \code{features.parquet}: model input
+        \item \code{extract.*.parquet}: caches of the exploration notebooks
+    \end{itemize}
+    Code lives in \code{notebooks/preprocessing/} and \code{src/pfas\_trace/transform.py}.
+    \item \textbf{Schema Summary:} \code{export.parquet} holds measurements and source sites in one table, separated by \code{category}. Each row of \code{features.parquet} is one measurement. Source sites only feed the feature calculation, and no foreign key links the two. Tables~\ref{tab:raw} and \ref{tab:features} list the columns.
+
+    \begin{table}[h]
+        \centering
+        \small
+        \begin{tabularx}{\linewidth}{l X}
+            \toprule
+            \textbf{Group} & \textbf{Columns} \\
+            \midrule
+            Classification & \code{category}, \code{type}, \code{sector} \\
+            Location & \code{lat}, \code{lon}, \code{name}, \code{city}, \code{country} \\
+            Lineage & \code{source\_type}, \code{data\_collection\_method}, \code{source\_text}, \code{source\_url}, \code{dataset\_id}, \code{dataset\_name} \\
+            Measurement & \code{pfas\_values}, \code{unit}, \code{pfas\_sum}, \code{matrix}, \code{date}, \code{year} \\
+            Other & \code{details} \\
+            \bottomrule
+        \end{tabularx}
+        \caption{Columns of \code{export.parquet} (21)}
+        \label{tab:raw}
+    \end{table}
+
+    \begin{table}[h]
+        \centering
+        \small
+        \begin{tabularx}{\linewidth}{l X}
+            \toprule
+            \textbf{Group} & \textbf{Columns} \\
+            \midrule
+            Identifiers (8) & \code{date}, \code{lat}, \code{lon}, \code{name}, \code{city}, \code{matrix}, \code{type}, \code{unit}  \\
+            Target (1) & \code{pfas\_sum} \\
+            Features (80) & 20 source groups $\times$ 4: \code{<group>\_distance\_min}, \code{<group>\_count\_0\_5km}, \code{<group>\_count\_5\_25km}, \code{<group>\_count\_25\_50km} \\
+            Tier 1 groups (3) & \code{producer}, \code{user}, \code{presumptive} \\
+            Tier 2 groups (17) & airports, military sites, firefighting, waste management, hazardous and non-hazardous waste, sewerage, industrial sites, textile finishing, metal treatment, fabricated metal, pulp and paper, paper articles, plastics, rubber and plastic products, organic chemicals, refined petroleum \\
+            \bottomrule
+        \end{tabularx}
+        \caption{Columns of \code{features.parquet} (86)}
+        \label{tab:features}
+    \end{table}
+
+    \item \textbf{Units \& Encodings:}
+    \begin{itemize}
+        \item Concentrations in parts per billion: ng/l for water, ng/kg for solids and biota (\code{dw} = dry weight, \code{fw} = fresh weight)
+        \item Distances in km, haversine with an Earth radius of 6371.0088 km
+        \item Coordinates in decimal degrees, stored as \code{float32} in the feature set
+        \item Counts are integers stored as \code{float32}
+        \item Dates in ISO 8601 with day precision and no timezone
+        \item Categories stay plain strings. Tier 2 group names become lowercase \code{snake\_case} prefixes
+    \end{itemize}
+\end{itemize}
+
+\end{document}

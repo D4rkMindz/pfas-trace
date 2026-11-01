@@ -152,7 +152,7 @@ def _extract_tier1_features(df: pd.DataFrame) -> pd.DataFrame:
     tier1_feature_df: pd.DataFrame = (
         cleaned_df.loc[
             cleaned_df["category"] == "Measurement",
-            ["date", "lat", "lon", "name", "city", "pfas_sum"],
+            ["date", "lat", "lon", "name", "city", "pfas_sum", "matrix", "unit", "type", "sector"],
         ]
         .copy()
         .reset_index(drop=True)
